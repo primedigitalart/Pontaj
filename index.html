@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Pontaj șoferi</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+  :root{ --accent:#f59e0b; }
+  html,body,#root{height:100%}
+  body{margin:0;background:#0a0a0a;font-family:'Manrope',sans-serif;color:#f5f5f5}
+  .font-display{font-family:'Archivo Black',sans-serif;letter-spacing:-.02em}
+  .font-mono{font-family:'JetBrains Mono',monospace}
+  .grid-bg{background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:48px 48px}
+  .btn-accent{background:var(--accent);color:#0a0a0a}
+  .btn-accent:hover{filter:brightness(1.1)}
+  .text-accent{color:var(--accent)}
+  .bg-accent-soft{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+  .border-accent{border-color:var(--accent)}
+  .border-accent-soft{border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+  .accent-dot{background:var(--accent)}
+  .glow-accent{box-shadow:0 0 44px color-mix(in srgb,var(--accent) 22%,transparent),inset 0 1px 0 rgba(255,255,255,.05)}
+  .grad-accent{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 14%,transparent),rgba(23,23,23,0))}
+  @keyframes bl{50%{opacity:.4}} .blink{animation:bl 1.4s ease-in-out infinite}
+  @keyframes su{from{transform:translateY(18px);opacity:0}to{transform:translateY(0);opacity:1}} .su{animation:su .35s ease-out backwards}
+  input::placeholder{color:#525252}
+  *{-webkit-tap-highlight-color:transparent}
+  @media print{
+    @page{margin:1.5cm}
+    body{background:white!important}
+    body *{visibility:hidden!important}
+    .print-section,.print-section *{visibility:visible!important}
+    .print-section{position:absolute!important;left:0!important;top:0!important;right:0!important;width:100%!important;max-width:100%!important;max-height:none!important;height:auto!important;background:white!important;color:black!important;border:none!important;border-radius:0!important;box-shadow:none!important;overflow:visible!important;padding:0!important;display:block!important}
+    .print-section *{color:black!important;background:white!important;border-color:#d4d4d4!important;box-shadow:none!important}
+    .no-print,.no-print *{display:none!important}
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useRef, createContext, useContext } = React;
+
+/* ============ CONFIG ============ */
+const SUPABASE_URL = "https://zhhnzeppdlwylprxaabr.supabase.co";
+const SUPABASE_KEY = "sb_publishable_SeBb3pHI2FmR6ouDgwi6eA_alk39_OG";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ============ i18n ============ */
+const LANGS = [{c:'ro',l:'RO'},{c:'en',l:'EN'},{c:'de',l:'DE'}];
+const LOCALE = {ro:'ro-RO',en:'en-GB',de:'de-DE'};
+const DICT = {
+  ro:{ brand_sub:'Sistem pontaj șoferi', logout:'Ieșire', loading:'Se încarcă...',
+    cancel:'Anulează', save:'Salvează', add:'Adaugă', back:'Înapoi',
+    entry_kicker:'Acces firmă', entry_title:'COD FIRMĂ', entry_desc:'Introdu codul primit de la firmă.',
+    entry_ph:'ex: ASTRANS', cont:'CONTINUĂ', invalid_code:'Cod firmă invalid.',
+    admin_access:'Acces administrator', select_driver:'SELECTEAZĂ ȘOFER',
+    select_driver_desc:'Apasă pe numele tău.', no_drivers:'Niciun șofer. Adaugă din panoul de administrator.',
+    pin_for:'PIN pentru', pin_wrong:'PIN incorect', pin_locked:'Blocat temporar. Încearcă mai târziu.',
+    enter:'Confirmă', hello:'Salut', on_shift:'În tură', free:'Liber',
+    shift_active:'TURĂ ACTIVĂ', start_shift_h:'PORNEȘTE TURA', m_worked:'Timp lucrat',
+    m_started:'Pornit la', m_km_start:'Km start', m_date:'Data',
+    btn_end:'TERMINĂ TURA', btn_start:'ÎNCEPE TURA', s_shifts:'Ture totale',
+    s_km:'Km totali', s_hours:'Ore lucrate', history:'ISTORIC TURE',
+    no_shifts:'Nicio tură înregistrată.', km_start_t:'Începe tura',
+    km_start_s:'Kilometraj la pornire', km_end_t:'Termină tura',
+    km_end_s:'Kilometraj la final', km_ph:'Kilometraj actual',
+    t_started:'Tură începută. Drum bun!', t_ended:'Tură terminată.',
+    err_km:'Km finali nu pot fi sub cei de start.', err_open:'Ai deja o tură pornită.',
+    admin_login:'ADMINISTRATOR', admin_login_d:'Logare cu email și parolă',
+    email:'Email', password:'Parolă', signin:'Intră', signin_err:'Email sau parolă greșite.',
+    panel:'PANOU CONTROL', tab_over:'General', tab_shifts:'Ture',
+    tab_drivers:'Șoferi', tab_brand:'Branding', s_drivers:'Șoferi',
+    s_on_now:'În tură acum', perf:'PERFORMANȚĂ ȘOFERI', badge_on:'În tură',
+    all_drivers:'Toți șoferii', c_start:'Start', c_end:'Final', c_dist:'Distanță',
+    add_driver:'Adaugă șofer', driver_new:'ȘOFER NOU', f_name:'Nume complet',
+    f_pin:'PIN (4-6 cifre)', deact:'Dezactivează', confirm_deact:'Dezactivezi acest șofer? Turele rămân în istoric.',
+    confirm_delsh:'Ștergi această tură?', t_added:'Șofer adăugat.', t_deact:'Șofer dezactivat.',
+    t_delsh:'Tură ștearsă.', export:'Export CSV', brand_t:'BRANDING FIRMĂ',
+    f_disp:'Nume afișat', f_mark:'Siglă (1-3 litere)', f_color:'Culoare',
+    t_brand:'Branding actualizat.', platform:'PLATFORMĂ', plat_d:'Firme client',
+    code_l:'Cod', drivers_w:'șoferi', records:'înregistrări',
+    csv:['Sofer','Data start','Ora start','Km start','Data final','Ora final','Km final','Km'],
+    csv_summary:['Sofer','Ore lucrate','Km parcurși'],
+    view_perf:'Vezi performanța', from_date:'De la', to_date:'Până la',
+    print:'Tipărește', save_csv:'Salvează CSV',
+    no_shifts_period:'Nicio tură în această perioadă.',
+    report_period:'Perioadă raport', perf_t:'PERFORMANȚĂ ȘOFER',
+    full_report:'Raport complet', company_report:'RAPORT COMPLET FIRMĂ',
+    generated_on:'Generat pe',edit_shift_kicker:'Corectează pontaj', edit_shift_t:'EDITARE TURĂ',
+f_start_time:'Ora început', f_end_time:'Ora final',
+f_start_km:'Km start', f_end_km:'Km final',
+f_reason:'Motiv (obligatoriu)', f_reason_ph:'ex: km introduși greșit',
+err_time_order:'Ora finală trebuie să fie după ora de început.',
+err_save:'Eroare la salvare.', t_shift_edited:'Tură actualizată.',
+edit_btn:'Editează'},
+  en:{ brand_sub:'Driver timesheet system', logout:'Sign out', loading:'Loading...',
+    cancel:'Cancel', save:'Save', add:'Add', back:'Back',
+    entry_kicker:'Company access', entry_title:'COMPANY CODE', entry_desc:'Enter the code from your company.',
+    entry_ph:'e.g. ASTRANS', cont:'CONTINUE', invalid_code:'Invalid company code.',
+    admin_access:'Administrator access', select_driver:'SELECT DRIVER',
+    select_driver_desc:'Tap your name.', no_drivers:'No drivers. Add them from the admin panel.',
+    pin_for:'PIN for', pin_wrong:'Wrong PIN', pin_locked:'Temporarily locked. Try later.',
+    enter:'Confirm', hello:'Hello', on_shift:'On shift', free:'Off duty',
+    shift_active:'SHIFT ACTIVE', start_shift_h:'START SHIFT', m_worked:'Time worked',
+    m_started:'Started at', m_km_start:'Start km', m_date:'Date',
+    btn_end:'END SHIFT', btn_start:'START SHIFT', s_shifts:'Total shifts',
+    s_km:'Total km', s_hours:'Hours worked', history:'SHIFT HISTORY',
+    no_shifts:'No shifts recorded.', km_start_t:'Start shift',
+    km_start_s:'Odometer at start', km_end_t:'End shift',
+    km_end_s:'Odometer at end', km_ph:'Current odometer',
+    t_started:'Shift started. Safe travels!', t_ended:'Shift ended.',
+    err_km:'End km cannot be below start km.', err_open:'You already have an open shift.',
+    admin_login:'ADMINISTRATOR', admin_login_d:'Sign in with email and password',
+    email:'Email', password:'Password', signin:'Sign in', signin_err:'Wrong email or password.',
+    panel:'CONTROL PANEL', tab_over:'Overview', tab_shifts:'Shifts',
+    tab_drivers:'Drivers', tab_brand:'Branding', s_drivers:'Drivers',
+    s_on_now:'On shift now', perf:'DRIVER PERFORMANCE', badge_on:'On shift',
+    all_drivers:'All drivers', c_start:'Start', c_end:'End', c_dist:'Distance',
+    add_driver:'Add driver', driver_new:'NEW DRIVER', f_name:'Full name',
+    f_pin:'PIN (4-6 digits)', deact:'Deactivate', confirm_deact:'Deactivate this driver? Shifts stay in history.',
+    confirm_delsh:'Delete this shift?', t_added:'Driver added.', t_deact:'Driver deactivated.',
+    t_delsh:'Shift deleted.', export:'Export CSV', brand_t:'COMPANY BRANDING',
+    f_disp:'Display name', f_mark:'Logo (1-3 letters)', f_color:'Color',
+    t_brand:'Branding updated.', platform:'PLATFORM', plat_d:'Client companies',
+    code_l:'Code', drivers_w:'drivers', records:'records',
+    csv:['Driver','Start date','Start time','Start km','End date','End time','End km','Km'],
+    csv_summary:['Driver','Hours worked','Km driven'],
+    view_perf:'View performance', from_date:'From', to_date:'To',
+    print:'Print', save_csv:'Save CSV',
+    no_shifts_period:'No shifts in this period.',
+    report_period:'Report period', perf_t:'DRIVER PERFORMANCE',
+    full_report:'Full report', company_report:'FULL COMPANY REPORT',
+    generated_on:'Generated on',edit_shift_kicker:'Correct timesheet', edit_shift_t:'EDIT SHIFT',
+f_start_time:'Start time', f_end_time:'End time',
+f_start_km:'Start km', f_end_km:'End km',
+f_reason:'Reason (required)', f_reason_ph:'e.g. km entered incorrectly',
+err_time_order:'End time must be after start time.',
+err_save:'Save failed.', t_shift_edited:'Shift updated.',
+edit_btn:'Edit' },
+  de:{ brand_sub:'Fahrer-Zeiterfassung', logout:'Abmelden', loading:'Wird geladen...',
+    cancel:'Abbrechen', save:'Speichern', add:'Hinzufügen', back:'Zurück',
+    entry_kicker:'Firmenzugang', entry_title:'FIRMENCODE', entry_desc:'Geben Sie den Code Ihrer Firma ein.',
+    entry_ph:'z. B. ASTRANS', cont:'WEITER', invalid_code:'Ungültiger Firmencode.',
+    admin_access:'Administratorzugang', select_driver:'FAHRER WÄHLEN',
+    select_driver_desc:'Tippen Sie auf Ihren Namen.', no_drivers:'Keine Fahrer. Im Admin-Bereich hinzufügen.',
+    pin_for:'PIN für', pin_wrong:'Falsche PIN', pin_locked:'Vorübergehend gesperrt. Später versuchen.',
+    enter:'Bestätigen', hello:'Hallo', on_shift:'Im Dienst', free:'Frei',
+    shift_active:'SCHICHT AKTIV', start_shift_h:'SCHICHT STARTEN', m_worked:'Arbeitszeit',
+    m_started:'Gestartet um', m_km_start:'Start-km', m_date:'Datum',
+    btn_end:'SCHICHT BEENDEN', btn_start:'SCHICHT BEGINNEN', s_shifts:'Schichten',
+    s_km:'Km gesamt', s_hours:'Arbeitsstunden', history:'SCHICHTVERLAUF',
+    no_shifts:'Keine Schichten erfasst.', km_start_t:'Schicht beginnen',
+    km_start_s:'Kilometerstand beim Start', km_end_t:'Schicht beenden',
+    km_end_s:'Kilometerstand am Ende', km_ph:'Aktueller Kilometerstand',
+    t_started:'Schicht gestartet. Gute Fahrt!', t_ended:'Schicht beendet.',
+    err_km:'End-km darf nicht unter Start-km liegen.', err_open:'Sie haben bereits eine offene Schicht.',
+    admin_login:'ADMINISTRATOR', admin_login_d:'Mit E-Mail und Passwort anmelden',
+    email:'E-Mail', password:'Passwort', signin:'Anmelden', signin_err:'Falsche E-Mail oder Passwort.',
+    panel:'KONTROLLZENTRUM', tab_over:'Übersicht', tab_shifts:'Schichten',
+    tab_drivers:'Fahrer', tab_brand:'Branding', s_drivers:'Fahrer',
+    s_on_now:'Jetzt im Dienst', perf:'FAHRERLEISTUNG', badge_on:'Im Dienst',
+    all_drivers:'Alle Fahrer', c_start:'Start', c_end:'Ende', c_dist:'Distanz',
+    add_driver:'Fahrer hinzufügen', driver_new:'NEUER FAHRER', f_name:'Vollständiger Name',
+    f_pin:'PIN (4-6 Ziffern)', deact:'Deaktivieren', confirm_deact:'Diesen Fahrer deaktivieren? Schichten bleiben im Verlauf.',
+    confirm_delsh:'Diese Schicht löschen?', t_added:'Fahrer hinzugefügt.', t_deact:'Fahrer deaktiviert.',
+    t_delsh:'Schicht gelöscht.', export:'CSV-Export', brand_t:'FIRMEN-BRANDING',
+    f_disp:'Anzeigename', f_mark:'Kürzel (1-3 Buchstaben)', f_color:'Farbe',
+    t_brand:'Branding aktualisiert.', platform:'PLATTFORM', plat_d:'Kundenfirmen',
+    code_l:'Code', drivers_w:'Fahrer', records:'Einträge',
+    csv:['Fahrer','Startdatum','Startzeit','Start-km','Enddatum','Endzeit','End-km','Km'],
+    csv_summary:['Fahrer','Arbeitsstunden','Gefahrene km'],
+    view_perf:'Leistung anzeigen', from_date:'Von', to_date:'Bis',
+    print:'Drucken', save_csv:'CSV speichern',
+    no_shifts_period:'Keine Schichten in diesem Zeitraum.',
+    report_period:'Berichtszeitraum', perf_t:'FAHRERLEISTUNG',
+    full_report:'Gesamtbericht', company_report:'GESAMTBERICHT FIRMA',
+    generated_on:'Erstellt am',edit_shift_kicker:'Schicht korrigieren', edit_shift_t:'SCHICHT BEARBEITEN',
+f_start_time:'Startzeit', f_end_time:'Endzeit',
+f_start_km:'Start-km', f_end_km:'End-km',
+f_reason:'Grund (Pflichtfeld)', f_reason_ph:'z. B. km falsch eingegeben',
+err_time_order:'Endzeit muss nach der Startzeit sein.',
+err_save:'Speichern fehlgeschlagen.', t_shift_edited:'Schicht aktualisiert.',
+edit_btn:'Bearbeiten' },
+};
+const LangCtx = createContext(null);
+const useT = () => useContext(LangCtx);
+
+/* ============ helpers ============ */
+let LOC='ro-RO';
+const fmtDur=(ms)=>{const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60;return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')}`;};
+const fmtDurS=(ms)=>{const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return `${h}h ${String(m).padStart(2,'0')}m`;};
+const fmtDurSign=(ms)=>{const sign=ms<0?'-':'+';const a=Math.abs(ms),s=Math.floor(a/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return `${sign}${h}h ${String(m).padStart(2,'0')}m`;};
+const fmtTime=(iso)=>new Date(iso).toLocaleTimeString(LOC,{hour:'2-digit',minute:'2-digit'});
+const fmtDate=(iso)=>new Date(iso).toLocaleDateString(LOC,{day:'2-digit',month:'2-digit',year:'numeric'});
+const fmtNum=(n)=>Number(n).toLocaleString(LOC);
+const ls={get:(k)=>{try{return JSON.parse(localStorage.getItem(k));}catch{return null;}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}},del:(k)=>{try{localStorage.removeItem(k);}catch{}}};
+
+/* ============ icons ============ */
+const P={
+  play:"M8 5v14l11-7z", stop:"M6 6h12v12H6z",
+  clock:"M12 8v4l3 2 M12 22a10 10 0 100-20 10 10 0 000 20",
+  out:"M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4 M16 17l5-5-5-5 M21 12H9",
+  plus:"M12 5v14 M5 12h14", trash:"M3 6h18 M8 6V4h8v2 M6 6l1 14h10l1-14",
+  dl:"M12 3v12 M7 10l5 5 5-5 M5 21h14", user:"M12 12a4 4 0 100-8 4 4 0 000 8 M4 20c0-4 4-6 8-6s8 2 8 6",
+  shield:"M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z", globe:"M12 22a10 10 0 100-20 10 10 0 000 20 M2 12h20 M12 2a15 15 0 010 20 M12 2a15 15 0 000 20",
+  arrow:"M5 12h14 M13 6l6 6-6 6", x:"M6 6l12 12 M18 6L6 18",
+  back:"M19 12H5 M11 6l-6 6 6 6", act:"M22 12h-4l-3 9L9 3l-3 9H2",
+  chev:"M9 6l6 6-6 6", del:"M9 6h11a2 2 0 012 2v8a2 2 0 01-2 2H9l-6-6 6-6z M18 9l-6 6 M12 9l6 6",
+  print:"M6 9V2h12v7 M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2 M6 14h12v8H6z",
+  cal:"M19 4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2z M16 2v4 M8 2v4 M3 10h18",
+  edit:"M12 20h9 M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"
+};
+function Ic({n,c="w-5 h-5"}){return <svg className={c} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={P[n]||""}/></svg>;}
+
+/* ============ small UI ============ */
+function Toast({t}){ if(!t) return null;
+  return <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 su px-4">
+    <div className={"flex items-center gap-3 px-5 py-3 rounded-lg border backdrop-blur shadow-xl text-sm font-medium "+(t.type==='error'?'bg-red-950/80 border-red-500/50 text-red-200':'bg-emerald-950/80 border-emerald-500/50 text-emerald-200')}>{t.msg}</div>
+  </div>;
+}
+function LangSwitcher(){ const {lang,setLang}=useT();
+  return <div className="flex items-center gap-1 rounded-md border border-neutral-800 p-1 bg-neutral-900">
+    <span className="text-neutral-500 ml-1 hidden sm:block"><Ic n="globe" c="w-3.5 h-3.5"/></span>
+    {LANGS.map(({c,l})=><button key={c} onClick={()=>setLang(c)} className={"px-2 py-1 rounded text-xs font-mono font-bold transition-colors "+(lang===c?'btn-accent':'text-neutral-400 hover:text-neutral-100')}>{l}</button>)}
+  </div>;
+}
+function Field({label,children}){return <div className="mb-4"><label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2">{label}</label>{children}</div>;}
+function Stat({label,value,accent}){return <div className={"rounded-lg p-4 border "+(accent?'bg-accent-soft border-accent-soft':'bg-neutral-900 border-neutral-800')}><div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">{label}</div><div className={"font-display text-2xl "+(accent?'text-accent':'')}>{value}</div></div>;}
+function Spinner(){const {t}=useT();return <div className="flex items-center justify-center min-h-[50vh]"><div className="text-neutral-500 text-sm uppercase tracking-widest blink">{t('loading')}</div></div>;}
+
+/* keypad */
+function Keypad({val,onDigit,onBack,onEnter,enterLabel}){
+  return <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto">
+    {['1','2','3','4','5','6','7','8','9'].map(n=><button key={n} onClick={()=>onDigit(n)} className="font-mono text-2xl py-5 rounded-md bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 active:scale-95 transition-all">{n}</button>)}
+    <button onClick={onBack} className="py-5 rounded-md bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 active:scale-95 flex items-center justify-center"><Ic n="back"/></button>
+    <button onClick={()=>onDigit('0')} className="font-mono text-2xl py-5 rounded-md bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 active:scale-95">0</button>
+    <button onClick={onEnter} disabled={val.length<4} className="btn-accent py-5 rounded-md disabled:opacity-30 flex items-center justify-center font-semibold text-sm">{enterLabel}</button>
+  </div>;
+}
+function Dots({len}){return <div className="flex justify-center gap-3 mb-2">{[0,1,2,3,4,5].slice(0,Math.max(4,len)).map(i=><div key={i} className={"w-3.5 h-3.5 rounded-full transition-all "+(len>i?'accent-dot scale-110':'bg-neutral-800')}/>)}</div>;}
+
+/* km modal */
+function KmModal({title,sub,action,onClose,onSubmit}){
+  const {t}=useT(); const [km,setKm]=useState(''); const [busy,setBusy]=useState(false);
+  const go=async()=>{ if(km===''||isNaN(parseFloat(km))) return; setBusy(true); await onSubmit(parseFloat(km)); setBusy(false); };
+  return <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+    <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-sm su"><div className="p-6">
+      <div className="flex items-start justify-between mb-1"><h3 className="font-display text-xl">{title}</h3><button onClick={onClose} className="text-neutral-500"><Ic n="x"/></button></div>
+      <p className="text-neutral-500 text-sm mb-6">{sub}</p>
+      <div className="relative">
+        <input type="number" inputMode="decimal" value={km} onChange={e=>setKm(e.target.value)} placeholder={t('km_ph')} autoFocus className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-4 py-4 font-mono text-2xl focus:border-accent focus:outline-none pr-12"/>
+        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 text-sm font-mono">km</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3 mt-6">
+        <button onClick={onClose} className="py-3 rounded-md border border-neutral-800 hover:bg-neutral-800 font-medium">{t('cancel')}</button>
+        <button onClick={go} disabled={km===''||busy} className="btn-accent py-3 rounded-md font-semibold disabled:opacity-40">{action}</button>
+      </div>
+    </div></div>
+  </div>;
+}
+
+/* ============ ENTRY ============ */
+function Entry({onCompany,onAdmin,toast}){
+  const {t}=useT(); const [code,setCode]=useState(''); const [busy,setBusy]=useState(false);
+  const go=async()=>{ if(!code.trim())return; setBusy(true);
+    const {data,error}=await sb.rpc('company_by_code',{p_code:code.trim()});
+    setBusy(false);
+    if(error||!data||!data.ok){ toast({type:'error',msg:t('invalid_code')}); return; }
+    onCompany(data);
+  };
+  return <div className="su max-w-md mx-auto">
+    <div className="mb-10 text-center">
+      <div className="text-[11px] text-neutral-500 uppercase tracking-[0.3em] mb-2">{t('entry_kicker')}</div>
+      <h1 className="font-display text-4xl">{t('entry_title')}</h1>
+      <p className="text-neutral-400 mt-3">{t('entry_desc')}</p>
+    </div>
+    <input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} onKeyDown={e=>e.key==='Enter'&&go()} placeholder={t('entry_ph')} autoFocus className="w-full bg-neutral-900 border border-neutral-800 rounded-md px-4 py-4 font-mono text-xl tracking-widest text-center focus:border-accent focus:outline-none"/>
+    <button onClick={go} disabled={!code.trim()||busy} className="btn-accent w-full mt-3 py-4 rounded-md font-display text-lg disabled:opacity-40 flex items-center justify-center gap-2">{t('cont')} <Ic n="arrow"/></button>
+    <div className="mt-10 pt-6 border-t border-neutral-900 flex justify-end">
+      <button onClick={onAdmin} className="flex items-center gap-2 text-xs text-neutral-500 hover:text-neutral-200 uppercase tracking-widest"><Ic n="shield" c="w-3.5 h-3.5"/> {t('admin_access')}</button>
+    </div>
+  </div>;
+}
+
+/* ============ DRIVER LOGIN ============ */
+function DriverLogin({company,onLogged,onBack,toast}){
+  const {t}=useT(); const [drivers,setDrivers]=useState(null); const [sel,setSel]=useState(null);
+  const [pin,setPin]=useState(''); const [err,setErr]=useState('');
+  useEffect(()=>{(async()=>{
+    const {data}=await sb.rpc('company_drivers',{p_code:company.code});
+    setDrivers(data||[]);
+  })();},[company.code]);
+  const submit=async()=>{
+    const {data,error}=await sb.rpc('driver_login',{p_code:company.code,p_driver_id:sel.driver_id,p_pin:pin});
+    if(error){ setErr(t('pin_wrong')); setPin(''); return; }
+    if(!data.ok){ setErr(data.reason==='locked'?t('pin_locked'):t('pin_wrong')); setPin(''); return; }
+    onLogged(data);
+  };
+  if(drivers===null) return <Spinner/>;
+  if(!sel) return <div className="su">
+    <button onClick={onBack} className="text-xs text-neutral-500 hover:text-neutral-200 uppercase tracking-widest mb-6 flex items-center gap-1"><Ic n="back" c="w-3.5 h-3.5"/> {t('back')}</button>
+    <div className="mb-8"><div className="text-[11px] text-accent uppercase tracking-[0.3em] mb-2">{company.name}</div><h1 className="font-display text-3xl sm:text-4xl">{t('select_driver')}</h1><p className="text-neutral-400 mt-3">{t('select_driver_desc')}</p></div>
+    {drivers.length===0? <div className="text-center py-12 border border-dashed border-neutral-800 rounded-lg text-neutral-500 text-sm">{t('no_drivers')}</div> :
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{drivers.map((d,i)=>
+        <button key={d.driver_id} onClick={()=>{setSel(d);setPin('');setErr('');}} style={{animationDelay:`${i*50}ms`}} className="su group text-left p-5 rounded-lg bg-neutral-900 border border-neutral-800 hover:border-accent-soft transition-all flex items-center gap-4">
+          <div className="w-12 h-12 rounded-md bg-neutral-800 group-hover:bg-accent-soft flex items-center justify-center"><Ic n="user" c="w-6 h-6"/></div>
+          <div className="flex-1 font-semibold truncate">{d.name}</div><span className="text-neutral-600 group-hover:text-accent"><Ic n="chev"/></span>
+        </button>)}</div>}
+  </div>;
+  return <div className="max-w-md mx-auto su">
+    <button onClick={()=>{setSel(null);setPin('');setErr('');}} className="text-xs text-neutral-500 hover:text-neutral-200 uppercase tracking-widest mb-6 flex items-center gap-1"><Ic n="x" c="w-3.5 h-3.5"/> {t('cancel')}</button>
+    <div className="text-center mb-8"><div className="w-20 h-20 rounded-full mx-auto mb-5 bg-neutral-800 flex items-center justify-center"><Ic n="user" c="w-9 h-9"/></div><h2 className="font-display text-2xl">{sel.name}</h2><p className="text-neutral-500 text-sm mt-1">{t('pin_for')} {sel.name.split(' ')[0]}</p></div>
+    <Dots len={pin.length}/>
+    <div className="h-5 text-center text-red-400 text-sm">{err}</div>
+    <div className="mt-4"><Keypad val={pin} onDigit={d=>{if(pin.length<6){setErr('');setPin(pin+d);}}} onBack={()=>{setErr('');setPin(pin.slice(0,-1));}} onEnter={submit} enterLabel={t('enter')}/></div>
+  </div>;
+}
+
+/* ============ DRIVER DASHBOARD ============ */
+function DriverDash({session,onLogout,toast}){
+  const {t}=useT(); const [active,setActive]=useState(undefined); const [hist,setHist]=useState([]);
+  const [now,setNow]=useState(Date.now()); const [m,setM]=useState(null); const [loading,setLoading]=useState(true);
+  const load=async()=>{
+    const a=await sb.rpc('driver_active_shift',{p_token:session.token});
+    if(a.error||!a.data||a.data.ok===false){ onLogout(); return; }
+    setActive(a.data.active);
+    const h=await sb.rpc('driver_history',{p_token:session.token});
+    if(h.data&&h.data.ok) setHist(h.data.shifts||[]);
+    setLoading(false);
+  };
+  useEffect(()=>{load();},[]);
+  useEffect(()=>{const i=setInterval(()=>setNow(Date.now()),1000);return ()=>clearInterval(i);},[]);
+  const stats=useMemo(()=>{const km=hist.reduce((s,x)=>s+(x.end_km-x.start_km),0);const ms=hist.reduce((s,x)=>s+(new Date(x.end_time)-new Date(x.start_time)),0);return {km,ms,n:hist.length};},[hist]);
+  const start=async(km)=>{ const {data}=await sb.rpc('driver_start_shift',{p_token:session.token,p_km:km});
+    if(data&&data.ok){toast({type:'ok',msg:t('t_started')});setM(null);load();}
+    else toast({type:'error',msg:data&&data.reason==='already_open'?t('err_open'):t('err_km')}); };
+  const end=async(km)=>{ const {data}=await sb.rpc('driver_end_shift',{p_token:session.token,p_km:km});
+    if(data&&data.ok){toast({type:'ok',msg:t('t_ended')+' '+fmtNum(data.km)+' km'});setM(null);load();}
+    else { toast({type:'error',msg:t('err_km')}); } };
+  if(loading) return <Spinner/>;
+  const elapsed=active?now-new Date(active.start_time).getTime():0;
+  return <div className="su">
+    <div className="mb-6"><div className="text-[11px] text-accent uppercase tracking-[0.3em] mb-1">{t('hello')}</div><h1 className="font-display text-3xl sm:text-4xl">{session.driver_name}</h1></div>
+    <div className={"relative rounded-xl border overflow-hidden "+(active?'border-accent-soft glow-accent grad-accent':'bg-neutral-900 border-neutral-800')}><div className="p-6 sm:p-8">
+      <div className="flex items-start justify-between mb-6"><div>
+        <div className="flex items-center gap-2 mb-2"><div className={"w-2 h-2 rounded-full "+(active?'accent-dot blink':'bg-neutral-600')}/><div className="text-xs uppercase tracking-widest text-neutral-400">{active?t('on_shift'):t('free')}</div></div>
+        <div className="font-display text-2xl sm:text-3xl">{active?t('shift_active'):t('start_shift_h')}</div></div>
+        <span className={active?'text-accent':'text-neutral-700'}><Ic n="act" c="w-8 h-8"/></span></div>
+      {active? <>
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="bg-neutral-950/50 border border-neutral-800/60 rounded-md p-4"><div className="text-neutral-500 text-xs uppercase tracking-widest mb-2">{t('m_worked')}</div><div className="font-mono text-xl">{fmtDur(elapsed)}</div></div>
+          <div className="bg-neutral-950/50 border border-neutral-800/60 rounded-md p-4"><div className="text-neutral-500 text-xs uppercase tracking-widest mb-2">{t('m_started')}</div><div className="font-mono text-xl">{fmtTime(active.start_time)}</div></div>
+          <div className="bg-neutral-950/50 border border-neutral-800/60 rounded-md p-4"><div className="text-neutral-500 text-xs uppercase tracking-widest mb-2">{t('m_km_start')}</div><div className="font-mono text-xl">{fmtNum(active.start_km)}</div></div>
+          <div className="bg-neutral-950/50 border border-neutral-800/60 rounded-md p-4"><div className="text-neutral-500 text-xs uppercase tracking-widest mb-2">{t('m_date')}</div><div className="font-mono text-xl">{fmtDate(active.start_time)}</div></div>
+        </div>
+        <button onClick={()=>setM('end')} className="btn-accent w-full font-display text-lg py-5 rounded-lg flex items-center justify-center gap-3"><Ic n="stop"/> {t('btn_end')}</button>
+      </> : <button onClick={()=>setM('start')} className="btn-accent w-full font-display text-lg py-5 rounded-lg flex items-center justify-center gap-3"><Ic n="play"/> {t('btn_start')}</button>}
+    </div></div>
+    <div className="grid grid-cols-3 gap-3 mt-6">
+      <Stat label={t('s_shifts')} value={stats.n}/><Stat label={t('s_km')} value={stats.km.toFixed(0)}/><Stat label={t('s_hours')} value={fmtDurS(stats.ms)}/>
+    </div>
+    <div className="mt-10">
+      <div className="flex items-center justify-between mb-4"><h2 className="font-display text-xl">{t('history')}</h2><span className="text-xs text-neutral-500 uppercase tracking-widest">{hist.length} {t('records')}</span></div>
+      {hist.length===0? <div className="text-center py-12 border border-dashed border-neutral-800 rounded-lg text-neutral-500 text-sm">{t('no_shifts')}</div> :
+        <div className="space-y-2">{hist.map(s=><div key={s.id} className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 flex items-center justify-between gap-4">
+          <div className="text-center"><div className="font-mono text-sm">{fmtDate(s.start_time)}</div><div className="text-[10px] text-neutral-500 uppercase tracking-widest mt-0.5">{fmtTime(s.start_time)} → {fmtTime(s.end_time)}</div></div>
+          <div className="text-right"><div className="font-mono text-accent font-semibold">{fmtNum((s.end_km-s.start_km).toFixed(1))} km</div><div className="text-[10px] text-neutral-500 uppercase tracking-widest mt-0.5">{fmtDurS(new Date(s.end_time)-new Date(s.start_time))}</div></div>
+        </div>)}</div>}
+    </div>
+    {m==='start'&&<KmModal title={t('km_start_t')} sub={t('km_start_s')} action={t('btn_start')} onClose={()=>setM(null)} onSubmit={start}/>}
+    {m==='end'&&<KmModal title={t('km_end_t')} sub={t('km_end_s')+' · '+t('m_km_start')+' '+fmtNum(active.start_km)} action={t('btn_end')} onClose={()=>setM(null)} onSubmit={end}/>}
+  </div>;
+}
+/* ============ EDIT SHIFT MODAL ============ */
+function EditShiftModal({shift, driverName, onClose, onSave}){
+  const {t}=useT();
+  const toLocal=(iso)=>{ if(!iso) return ''; const d=new Date(iso); const pad=n=>String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const [startTime,setStartTime]=useState(toLocal(shift.start_time));
+  const [endTime,setEndTime]=useState(toLocal(shift.end_time));
+  const [startKm,setStartKm]=useState(String(shift.start_km));
+  const [endKm,setEndKm]=useState(String(shift.end_km));
+  const [reason,setReason]=useState('');
+  const [busy,setBusy]=useState(false);
+  const sKm=Number(startKm), eKm=Number(endKm);
+  const sT=startTime?new Date(startTime):null, eT=endTime?new Date(endTime):null;
+  const timeBad=sT&&eT&&eT<=sT;
+  const kmBad=!isNaN(sKm)&&!isNaN(eKm)&&eKm<sKm;
+  const valid=!isNaN(sKm)&&!isNaN(eKm)&&!kmBad&&sT&&eT&&!timeBad&&reason.trim().length>=3;
+  const submit=async()=>{ if(!valid||busy) return; setBusy(true);
+    await onSave({ start_time:new Date(startTime).toISOString(), end_time:new Date(endTime).toISOString(),
+      start_km:sKm, end_km:eKm, motiv:reason.trim() }); setBusy(false); };
+  return <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="bg-neutral-900 border border-neutral-800 rounded-t-xl sm:rounded-xl w-full max-w-md max-h-[95vh] flex flex-col su">
+      <div className="flex items-start justify-between p-5 sm:p-6 border-b border-neutral-800">
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] text-accent uppercase tracking-[0.3em] mb-1">{t('edit_shift_kicker')}</div>
+          <h3 className="font-display text-xl">{t('edit_shift_t')}</h3>
+          <div className="text-xs text-neutral-500 mt-1 truncate">{driverName}</div>
+        </div>
+        <button onClick={onClose} className="text-neutral-500 hover:text-neutral-200 ml-3"><Ic n="x"/></button>
+      </div>
+      <div className="overflow-y-auto p-5 sm:p-6 space-y-4">
+        <Field label={t('f_start_time')}>
+          <input type="datetime-local" value={startTime} onChange={e=>setStartTime(e.target.value)}
+            className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-4 py-3 focus:border-accent focus:outline-none font-mono"/>
+        </Field>
+        <Field label={t('f_start_km')}>
+          <input type="number" inputMode="numeric" value={startKm} onChange={e=>setStartKm(e.target.value)}
+            className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-4 py-3 focus:border-accent focus:outline-none font-mono"/>
+        </Field>
+        <Field label={t('f_end_time')}>
+          <input type="datetime-local" value={endTime} onChange={e=>setEndTime(e.target.value)}
+            className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-4 py-3 focus:border-accent focus:outline-none font-mono"/>
+        </Field>
+        <Field label={t('f_end_km')}>
+          <input type="number" inputMode="numeric" value={endKm} onChange={e=>setEndKm(e.target.value)}
+            className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-4 py-3 focus:border-accent focus:outline-none font-mono"/>
+        </Field>
+        <Field label={t('f_reason')}>
+          <textarea value={reason} onChange={e=>setReason(e.target.value)} rows={3} placeholder={t('f_reason_ph')}
+            className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-4 py-3 focus:border-accent focus:outline-none resize-none"/>
+        </Field>
+        {timeBad&&<div className="text-red-400 text-sm">{t('err_time_order')}</div>}
+        {kmBad&&<div className="text-red-400 text-sm">{t('err_km')}</div>}
+      </div>
+      <div className="p-5 sm:p-6 border-t border-neutral-800 grid grid-cols-2 gap-3">
+        <button onClick={onClose} className="py-3 rounded-md border border-neutral-800 hover:bg-neutral-800 font-medium">{t('cancel')}</button>
+        <button onClick={submit} disabled={!valid||busy} className="btn-accent py-3 rounded-md font-semibold disabled:opacity-40">{busy?t('loading'):t('save')}</button>
+      </div>
+    </div>
+  </div>;
+}
+/* ============ ADMIN LOGIN ============ */
+function AdminLogin({onIn,onBack,toast}){
+  const {t}=useT(); const [email,setEmail]=useState(''); const [pw,setPw]=useState(''); const [busy,setBusy]=useState(false);
+  const go=async()=>{ setBusy(true);
+    const {data,error}=await sb.auth.signInWithPassword({email:email.trim(),password:pw});
+    setBusy(false);
+    if(error||!data.user){ toast({type:'error',msg:t('signin_err')}); return; }
+    onIn();
+  };
+  return <div className="max-w-md mx-auto su">
+    <button onClick={onBack} className="text-xs text-neutral-500 hover:text-neutral-200 uppercase tracking-widest mb-6 flex items-center gap-1"><Ic n="back" c="w-3.5 h-3.5"/> {t('back')}</button>
+    <div className="text-center mb-8"><div className="w-20 h-20 rounded-full mx-auto mb-5 bg-neutral-100 text-neutral-950 flex items-center justify-center"><Ic n="shield" c="w-9 h-9"/></div><h2 className="font-display text-2xl">{t('admin_login')}</h2><p className="text-neutral-500 text-sm mt-1">{t('admin_login_d')}</p></div>
+    <Field label={t('email')}><input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 rounded-md px-4 py-3 focus:border-accent focus:outline-none"/></Field>
+    <Field label={t('password')}><input type="password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==='Enter'&&go()} className="w-full bg-neutral-900 border border-neutral-800 rounded-md px-4 py-3 focus:border-accent focus:outline-none"/></Field>
+    <button onClick={go} disabled={!email||!pw||busy} className="btn-accent w-full mt-2 py-4 rounded-md font-display text-lg disabled:opacity-40">{t('signin')}</button>
+  </div>;
+}
+
+/* ============ ADMIN PANEL ============ */
+function AdminPanel({profile,onLogout,toast}){
+  const {t}=useT();
+  const [company,setCompany]=useState(null);
+  const [drivers,setDrivers]=useState([]); const [shifts,setShifts]=useState([]);
+  const [tab,setTab]=useState('over'); const [loading,setLoading]=useState(true);
+  const [showAdd,setShowAdd]=useState(false); const [showBrand,setShowBrand]=useState(false);
+  const [detailDriver,setDetailDriver]=useState(null);
+  const [showReport,setShowReport]=useState(false);
+  const [editingShift,setEditingShift]=useState(null);
+  const load=async()=>{
+    const c=await sb.from('companies').select('*').eq('id',profile.company_id).maybeSingle();
+    if(c.data){ setCompany(c.data); document.documentElement.style.setProperty('--accent',c.data.accent); }
+    const d=await sb.from('drivers').select('id,name,active,ore_norma,pauza_minute').eq('company_id',profile.company_id).order('name');
+    setDrivers(d.data||[]);
+    const s=await sb.from('shifts').select('id,driver_id,start_time,start_km,end_time,end_km').eq('company_id',profile.company_id).order('start_time',{ascending:false});
+    setShifts(s.data||[]);
+    setLoading(false);
+  };
+  useEffect(()=>{load();},[]);
+  const done=shifts.filter(s=>s.end_time);
+  const g=useMemo(()=>{
+    const km=done.reduce((a,s)=>a+(s.end_km-s.start_km),0);
+    const ms=done.reduce((a,s)=>a+(new Date(s.end_time)-new Date(s.start_time)),0);
+    const open=shifts.filter(s=>!s.end_time).length;
+    const per=drivers.filter(d=>d.active).map(d=>{const ds=done.filter(s=>s.driver_id===d.id);return {...d,n:ds.length,km:ds.reduce((a,s)=>a+(s.end_km-s.start_km),0),ms:ds.reduce((a,s)=>a+(new Date(s.end_time)-new Date(s.start_time)),0),on:shifts.some(s=>s.driver_id===d.id&&!s.end_time)};});
+    return {km,ms,open,per};
+  },[shifts,drivers]);
+  const addDriver=async(name,pin,ore,pauza)=>{
+    const {data:hashData,error:hashErr}=await sb.rpc('hash_pin',{p_pin:pin});
+    if(hashErr||!hashData){toast({type:'error',msg:t('signin_err')});return;}
+    const {data:prof}=await sb.from('profiles').select('company_id').eq('id',(await sb.auth.getUser()).data.user.id).single();
+    if(!prof){toast({type:'error',msg:t('signin_err')});return;}
+    const {error}=await sb.from('drivers').insert({company_id:prof.company_id,name,pin_hash:hashData,ore_norma:ore,pauza_minute:pauza});
+    if(!error){toast({type:'ok',msg:t('t_added')});setShowAdd(false);load();}
+    else toast({type:'error',msg:t('signin_err')});
+  };
+  const deact=async(d)=>{ if(!confirm(t('confirm_deact')))return;
+    await sb.from('drivers').update({active:false}).eq('id',d.id); toast({type:'ok',msg:t('t_deact')}); load(); };
+  const saveBrand=async(f)=>{ await sb.from('companies').update({name:f.name,mark:f.mark,accent:f.accent}).eq('id',company.id);
+    setCompany({...company,...f}); document.documentElement.style.setProperty('--accent',f.accent); setShowBrand(false); toast({type:'ok',msg:t('t_brand')}); };
+  if(loading) return <Spinner/>;
+  return <div className="su">
+    <div className="flex items-end justify-between mb-6 gap-3 flex-wrap">
+      <div><div className="text-[11px] text-accent uppercase tracking-[0.3em] mb-1">{company?company.name:''}</div><h1 className="font-display text-3xl sm:text-4xl">{t('panel')}</h1></div>
+      <div className="flex gap-2">
+        <button onClick={()=>setShowBrand(true)} className="px-4 py-2.5 rounded-md border border-neutral-800 hover:border-neutral-600 text-sm">{t('tab_brand')}</button>
+      </div>
+    </div>
+    <div className="flex gap-1 border-b border-neutral-800 mb-6">
+      {[['over',t('tab_over')],['drivers',t('tab_drivers')]].map(([k,l])=>
+        <button key={k} onClick={()=>setTab(k)} className={"px-4 py-3 text-sm font-medium border-b-2 -mb-px "+(tab===k?'border-accent text-accent':'border-transparent text-neutral-500 hover:text-neutral-200')}>{l}</button>)}
+    </div>
+    {tab==='over'&&<div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <Stat label={t('s_drivers')} value={drivers.filter(d=>d.active).length}/>
+        <Stat label={t('s_on_now')} value={g.open} accent/>
+        <Stat label={t('s_km')} value={g.km.toFixed(0)}/>
+        <Stat label={t('s_hours')} value={fmtDurS(g.ms)}/>
+      </div>
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 className="font-display text-lg">{t('perf')}</h2>
+        <button onClick={()=>setShowReport(true)} className="flex items-center gap-2 px-3 py-2 rounded-md border border-accent-soft text-accent hover:bg-accent-soft text-sm"><Ic n="dl" c="w-4 h-4"/> {t('full_report')}</button>
+      </div>
+      <div className="space-y-2">{g.per.map(d=><div key={d.id} className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 flex items-center gap-4">
+        <div className="w-10 h-10 rounded-md bg-neutral-800 flex items-center justify-center"><Ic n="user"/></div>
+        <div className="flex-1"><div className="font-semibold flex items-center gap-2">{d.name}{d.on&&<span className="text-[10px] uppercase tracking-widest bg-accent-soft text-accent px-2 py-0.5 rounded">{t('badge_on')}</span>}</div>
+        <div className="text-xs text-neutral-500 mt-0.5 font-mono">{d.n} · {d.km.toFixed(0)} km · {fmtDurS(d.ms)}</div></div>
+      </div>)}</div>
+    </div>}
+    {tab==='drivers'&&<div>
+      <div className="flex justify-between items-center mb-4"><span className="text-xs text-neutral-500 uppercase tracking-widest">{drivers.filter(d=>d.active).length} {t('drivers_w')}</span>
+        <button onClick={()=>setShowAdd(true)} className="flex items-center gap-2 px-3 py-2 rounded-md border border-accent-soft text-accent hover:bg-accent-soft text-sm"><Ic n="plus" c="w-4 h-4"/> {t('add_driver')}</button></div>
+      <div className="space-y-2">{drivers.filter(d=>d.active).map(d=><div key={d.id} onClick={()=>setDetailDriver(d)} className="cursor-pointer bg-neutral-900 border border-neutral-800 hover:border-accent-soft rounded-lg p-4 flex items-center gap-4 transition-colors group">
+        <div className="w-10 h-10 rounded-md bg-neutral-800 group-hover:bg-accent-soft flex items-center justify-center"><Ic n="user"/></div>
+        <div className="flex-1 min-w-0"><div className="font-semibold truncate">{d.name}</div><div className="text-xs text-neutral-500 mt-0.5">{t('view_perf')}</div></div>
+        <span className="text-neutral-600 group-hover:text-accent"><Ic n="chev"/></span>
+        <button onClick={(e)=>{e.stopPropagation();deact(d);}} className="text-neutral-600 hover:text-red-400 p-2"><Ic n="trash" c="w-4 h-4"/></button>
+      </div>)}</div>
+    </div>}
+    {showAdd&&<AddDriver onClose={()=>setShowAdd(false)} onSubmit={addDriver}/>}
+    {showBrand&&company&&<BrandModal company={company} onClose={()=>setShowBrand(false)} onSave={saveBrand}/>}
+{detailDriver&&<DriverDetailModal driver={detailDriver} shifts={shifts} company={company} onClose={()=>setDetailDriver(null)} onEditShift={setEditingShift}/>}
+    {editingShift&&<EditShiftModal shift={editingShift} driverName={(drivers.find(d=>d.id===editingShift.driver_id)||{}).name||''} onClose={()=>setEditingShift(null)} onSave={async(vals)=>{
+      const {data:u}=await sb.auth.getUser();
+      if(!u||!u.user){ toast({type:'error',msg:t('signin_err')}); return; }
+      const upd=await sb.from('shifts').update({start_time:vals.start_time,end_time:vals.end_time,start_km:vals.start_km,end_km:vals.end_km}).eq('id',editingShift.id);
+      if(upd.error){ toast({type:'error',msg:t('err_save')}); return; }
+      await sb.from('pontaje_modificari').insert({
+        shift_id:editingShift.id, company_id:profile.company_id,
+        admin_id:u.user.id, admin_nume:u.user.email,
+        start_km_vechi:editingShift.start_km, end_km_vechi:editingShift.end_km,
+        start_time_vechi:editingShift.start_time, end_time_vechi:editingShift.end_time,
+        start_km_nou:vals.start_km, end_km_nou:vals.end_km,
+        start_time_nou:vals.start_time, end_time_nou:vals.end_time,
+        motiv:vals.motiv
+      });
+      toast({type:'ok',msg:t('t_shift_edited')});
+      setEditingShift(null);
+      load();
+    }}/>}    {showReport&&<CompanyReportModal drivers={drivers} shifts={shifts} company={company} onClose={()=>setShowReport(false)}/>}
+  </div>;
+}
+function AddDriver({onClose,onSubmit}){
+  const {t}=useT();
+  const [n,setN]=useState('');
+  const [p,setP]=useState('');
+  const [ore,setOre]=useState('8');
+  const [pauza,setPauza]=useState('60');
+  const ok=n.trim().length>=2&&/^\d{4,6}$/.test(p)&&Number(ore)>0&&Number(ore)<=24;
+  return <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+    <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-sm su"><div className="p-6">
+      <div className="flex items-start justify-between mb-6"><h3 className="font-display text-xl">{t('driver_new')}</h3><button onClick={onClose} className="text-neutral-500"><Ic n="x"/></button></div>
+      <Field label={t('f_name')}><input value={n} onChange={e=>setN(e.target.value)} autoFocus className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-4 py-3 focus:border-accent focus:outline-none"/></Field>
+      <Field label={t('f_pin')}><input inputMode="numeric" value={p} onChange={e=>setP(e.target.value.replace(/\D/g,'').slice(0,6))} className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-4 py-3 font-mono text-xl tracking-widest focus:border-accent focus:outline-none"/></Field>
+      <Field label="Ore norma / zi"><input inputMode="decimal" value={ore} onChange={e=>setOre(e.target.value.replace(/[^0-9.]/g,''))} className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-4 py-3 font-mono text-xl focus:border-accent focus:outline-none"/></Field>
+      <Field label="Pauza (minute)">
+        <div className="flex gap-2">
+          {[30,45,60].map(v=><button key={v} onClick={()=>setPauza(String(v))} className={"flex-1 py-3 rounded-md border font-mono text-sm font-semibold transition-colors "+(pauza===String(v)?'btn-accent border-transparent':'border-neutral-700 hover:border-accent text-neutral-300')}>{v} min</button>)}
+        </div>
+      </Field>
+      <div className="grid grid-cols-2 gap-3 mt-2">
+        <button onClick={onClose} className="py-3 rounded-md border border-neutral-800 hover:bg-neutral-800 font-medium">{t('cancel')}</button>
+        <button onClick={()=>onSubmit(n.trim(),p,Number(ore),Number(pauza))} disabled={!ok} className="btn-accent py-3 rounded-md font-semibold disabled:opacity-40">{t('add')}</button>
+      </div>
+    </div></div>
+  </div>;
+}
+function BrandModal({company,onClose,onSave}){
+  const {t}=useT(); const PAL=['#f59e0b','#38bdf8','#34d399','#f472b6','#a78bfa','#fb7185','#facc15','#2dd4bf'];
+  const [f,setF]=useState({name:company.name,mark:company.mark,accent:company.accent});
+  return <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+    <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-md su" style={{'--accent':f.accent}}><div className="p-6">
+      <div className="flex items-start justify-between mb-6"><h3 className="font-display text-xl">{t('brand_t')}</h3><button onClick={onClose} className="text-neutral-500"><Ic n="x"/></button></div>
+      <Field label={t('f_disp')}><input value={f.name} onChange={e=>setF({...f,name:e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-4 py-3 focus:border-accent focus:outline-none"/></Field>
+      <Field label={t('f_mark')}><input value={f.mark} onChange={e=>setF({...f,mark:e.target.value.toUpperCase().slice(0,3)})} className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-4 py-3 font-display text-center focus:border-accent focus:outline-none"/></Field>
+      <Field label={t('f_color')}><div className="flex flex-wrap gap-2">{PAL.map(c=><button key={c} onClick={()=>setF({...f,accent:c})} className={"w-9 h-9 rounded-md "+(f.accent===c?'ring-2 ring-offset-2 ring-offset-neutral-900 ring-white':'')} style={{background:c}}/>)}</div></Field>
+      <div className="mt-4 p-4 rounded-md border border-accent-soft grad-accent flex items-center gap-3"><div className="w-11 h-11 rounded-md flex items-center justify-center font-display" style={{background:f.accent,color:'#0a0a0a'}}>{f.mark||'··'}</div><div className="font-semibold text-sm">{f.name}</div></div>
+      <div className="grid grid-cols-2 gap-3 mt-6"><button onClick={onClose} className="py-3 rounded-md border border-neutral-800 hover:bg-neutral-800 font-medium">{t('cancel')}</button>
+        <button onClick={()=>onSave(f)} className="btn-accent py-3 rounded-md font-semibold">{t('save')}</button></div>
+    </div></div>
+  </div>;
+}
+
+function DriverDetailModal({driver,shifts,company,onClose,onEditShift}){
+  const {t}=useT();
+  const today=new Date(); const todayStr=today.toISOString().slice(0,10);
+  const [from,setFrom]=useState(todayStr);
+  const [to,setTo]=useState(todayStr);
+  const inRange=useMemo(()=>{
+    const start=new Date(from+'T00:00:00');
+    const end=new Date(to+'T23:59:59');
+    return shifts.filter(s=>s.driver_id===driver.id&&s.end_time&&new Date(s.start_time)>=start&&new Date(s.start_time)<=end)
+      .sort((a,b)=>new Date(a.start_time)-new Date(b.start_time));
+  },[shifts,driver.id,from,to]);
+  const stats=useMemo(()=>{
+    const km=inRange.reduce((a,s)=>a+(s.end_km-s.start_km),0);
+    const ms=inRange.reduce((a,s)=>a+(new Date(s.end_time)-new Date(s.start_time)),0);
+    return {n:inRange.length,km,ms};
+  },[inRange]);
+  const handlePDF=()=>{
+    const pauza_ms=(driver.pauza_minute||60)*60000;
+    const norma_ms=(driver.ore_norma||8)*3600000;
+    const totalKm=inRange.reduce((a,s)=>a+(s.end_km-s.start_km),0);
+    const totalMs=inRange.reduce((a,s)=>a+(new Date(s.end_time)-new Date(s.start_time)),0);
+    const efectivMs=inRange.reduce((a,s)=>a+Math.max(0,new Date(s.end_time)-new Date(s.start_time)-pauza_ms),0);
+    const normaMs=inRange.length*norma_ms;
+    const diffMs=efectivMs-normaMs;
+    const rows=inRange.map(s=>{
+      const durMs=new Date(s.end_time)-new Date(s.start_time);
+      const efMs=Math.max(0,durMs-pauza_ms);
+      return [fmtDate(s.start_time),fmtTime(s.start_time),fmtTime(s.end_time),fmtNum(s.start_km),fmtNum(s.end_km),(s.end_km-s.start_km).toFixed(1)+' km',fmtDurS(efMs)];
+    });
+    const tableRows=rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('');
+    const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pontaj ${driver.name}</title><style>
+      body{font-family:Arial,sans-serif;padding:30px;color:#111;font-size:12px}
+      h1{font-size:20px;margin:0 0 4px}
+      .sub{color:#666;font-size:11px;margin-bottom:20px}
+      .firma{font-size:13px;font-weight:bold;color:#555;margin-bottom:4px}
+      table{width:100%;border-collapse:collapse;margin-top:16px}
+      th{background:#f0f0f0;padding:8px 10px;text-align:left;font-size:11px;border:1px solid #ddd}
+      td{padding:7px 10px;border:1px solid #eee;font-size:11px}
+      tr:nth-child(even) td{background:#fafafa}
+      .totals{margin-top:20px;border:1px solid #ddd;border-radius:6px;padding:16px;display:flex;gap:30px;flex-wrap:wrap}
+      .tot-item{display:flex;flex-direction:column;gap:2px}
+      .tot-label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.05em}
+      .tot-val{font-size:18px;font-weight:bold}
+      .diff-pos{color:#16a34a}.diff-neg{color:#dc2626}
+      .footer{margin-top:30px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:10px}
+    </style></head><body>
+      <div class="firma">${company?company.name:''}</div>
+      <h1>${driver.name}</h1>
+      <div class="sub">Perioada: ${fmtDate(from+'T00:00:00')} — ${fmtDate(to+'T00:00:00')}</div>
+      <table>
+        <thead><tr><th>Data</th><th>Start</th><th>Final</th><th>Km Start</th><th>Km Final</th><th>Km Parcursi</th><th>Ore Efective</th></tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+      <div class="totals">
+        <div class="tot-item"><span class="tot-label">Total Ture</span><span class="tot-val">${inRange.length}</span></div>
+        <div class="tot-item"><span class="tot-label">Total Km</span><span class="tot-val">${totalKm.toFixed(0)} km</span></div>
+        <div class="tot-item"><span class="tot-label">Total Ore Brut</span><span class="tot-val">${fmtDurS(totalMs)}</span></div>
+        <div class="tot-item"><span class="tot-label">Ore Efective</span><span class="tot-val">${fmtDurS(efectivMs)}</span></div>
+        <div class="tot-item"><span class="tot-label">Norma (${driver.ore_norma||8}h/zi)</span><span class="tot-val">${fmtDurS(normaMs)}</span></div>
+        <div class="tot-item"><span class="tot-label">Diferenta</span><span class="tot-val ${diffMs>=0?'diff-pos':'diff-neg'}">${fmtDurSign(diffMs)}</span></div>
+      </div>
+      <div class="footer">Generat: ${new Date().toLocaleString('ro-RO')} · Pontaj ${company?company.code:''}</div>
+    </body></html>`;
+    const w=window.open('','_blank');
+    w.document.write(html);
+    w.document.close();
+    setTimeout(()=>w.print(),500);
+  };
+  return <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="bg-neutral-900 border border-neutral-800 rounded-t-xl sm:rounded-xl w-full max-w-2xl max-h-[95vh] flex flex-col su print-section">
+      {/* Header */}
+      <div className="flex items-start justify-between p-5 sm:p-6 border-b border-neutral-800">
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] text-accent uppercase tracking-[0.3em] mb-1">{company?company.name:''}</div>
+          <h3 className="font-display text-xl sm:text-2xl truncate">{driver.name}</h3>
+          <div className="text-xs text-neutral-500 mt-1 font-mono">{t('report_period')}: {fmtDate(from+'T00:00:00')} — {fmtDate(to+'T00:00:00')}</div>
+        </div>
+        <button onClick={onClose} className="text-neutral-500 hover:text-neutral-200 no-print ml-3"><Ic n="x"/></button>
+      </div>
+      {/* Body */}
+      <div className="overflow-y-auto flex-1 p-5 sm:p-6">
+        {/* Date range pickers */}
+        <div className="grid grid-cols-2 gap-3 mb-5 no-print">
+          <div>
+            <label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2 flex items-center gap-1"><Ic n="cal" c="w-3.5 h-3.5"/> {t('from_date')}</label>
+            <input type="date" value={from} onChange={e=>setFrom(e.target.value)} max={to} className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-3 py-2.5 focus:border-accent focus:outline-none font-mono text-sm"/>
+          </div>
+          <div>
+            <label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2 flex items-center gap-1"><Ic n="cal" c="w-3.5 h-3.5"/> {t('to_date')}</label>
+            <input type="date" value={to} onChange={e=>setTo(e.target.value)} min={from} max={todayStr} className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-3 py-2.5 focus:border-accent focus:outline-none font-mono text-sm"/>
+          </div>
+        </div>
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-3 mb-5">
+          <div className="bg-neutral-950 border border-neutral-800 rounded-md p-3"><div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">{t('s_shifts')}</div><div className="font-display text-xl">{stats.n}</div></div>
+          <div className="bg-neutral-950 border border-neutral-800 rounded-md p-3"><div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">{t('s_km')}</div><div className="font-display text-xl">{fmtNum(stats.km.toFixed(0))}</div></div>
+          <div className="bg-neutral-950 border border-neutral-800 rounded-md p-3"><div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">{t('s_hours')}</div><div className="font-display text-xl">{fmtDurS(stats.ms)}</div></div>
+        </div>
+        {/* Shifts list */}
+        {inRange.length===0 ?
+          <div className="text-center py-12 border border-dashed border-neutral-800 rounded-lg text-neutral-500 text-sm">{t('no_shifts_period')}</div> :
+          <div className="space-y-2">{inRange.map(s=><div key={s.id} className="bg-neutral-950 border border-neutral-800 rounded-md p-3">
+<div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                <span className="font-mono text-sm">{fmtDate(s.start_time)}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-accent text-sm font-semibold">{(s.end_km-s.start_km).toFixed(1)} km</span>
+                  <button onClick={()=>onEditShift&&onEditShift(s)} className="no-print text-neutral-500 hover:text-accent p-1" title={t('edit_btn')}><Ic n="edit" c="w-4 h-4"/></button>
+                </div>
+              </div>            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div><div className="text-[10px] uppercase tracking-widest text-neutral-500">{t('c_start')}</div><div className="font-mono">{fmtTime(s.start_time)} · {fmtNum(s.start_km)}</div></div>
+              <div><div className="text-[10px] uppercase tracking-widest text-neutral-500">{t('c_end')}</div><div className="font-mono">{fmtTime(s.end_time)} · {fmtNum(s.end_km)}</div></div>
+              <div><div className="text-[10px] uppercase tracking-widest text-neutral-500">{t('s_hours')}</div><div className="font-mono">{fmtDurS(new Date(s.end_time)-new Date(s.start_time))}</div></div>
+            </div>
+          </div>)}</div>
+        }
+        {/* Footer info shown only on print */}
+        <div className="hidden print:block mt-6 pt-4 border-t border-neutral-300 text-xs text-neutral-500">
+          {t('generated_on')} {new Date().toLocaleString(LOC)}
+        </div>
+      </div>
+      {/* Footer */}
+      <div className="p-5 sm:p-6 border-t border-neutral-800 flex gap-3 no-print">
+        <button onClick={handlePDF} disabled={inRange.length===0} className="flex-1 btn-accent py-3 rounded-md font-semibold disabled:opacity-40 flex items-center justify-center gap-2"><Ic n="dl" c="w-4 h-4"/> Descarca PDF</button>
+      </div>
+    </div>
+  </div>;
+}
+
+function CompanyReportModal({drivers,shifts,company,onClose}){
+  const {t}=useT();
+  const today=new Date(); const todayStr=today.toISOString().slice(0,10);
+  const [from,setFrom]=useState(todayStr);
+  const [to,setTo]=useState(todayStr);
+  const activeDrivers=useMemo(()=>drivers.filter(d=>d.active).sort((a,b)=>a.name.localeCompare(b.name,'ro')),[drivers]);
+  const byDriver=useMemo(()=>{
+    const start=new Date(from+'T00:00:00');
+    const end=new Date(to+'T23:59:59');
+    const out={};
+    activeDrivers.forEach(d=>{
+      out[d.id]=shifts.filter(s=>s.driver_id===d.id&&s.end_time&&new Date(s.start_time)>=start&&new Date(s.start_time)<=end)
+        .sort((a,b)=>new Date(a.start_time)-new Date(b.start_time));
+    });
+    return out;
+  },[shifts,activeDrivers,from,to]);
+  const overall=useMemo(()=>{
+    let km=0,ms=0,n=0;
+    activeDrivers.forEach(d=>{
+      const ds=byDriver[d.id]||[];
+      n+=ds.length;
+      km+=ds.reduce((a,s)=>a+(s.end_km-s.start_km),0);
+      ms+=ds.reduce((a,s)=>a+(new Date(s.end_time)-new Date(s.start_time)),0);
+    });
+    return {n,km,ms};
+  },[activeDrivers,byDriver]);
+  const handlePDF=()=>{
+    const driverRows=activeDrivers.map(d=>{
+      const ds=byDriver[d.id]||[];
+      const dkm=ds.reduce((a,s)=>a+(s.end_km-s.start_km),0);
+      const dms=ds.reduce((a,s)=>a+(new Date(s.end_time)-new Date(s.start_time)),0);
+      const pauza_ms=(d.pauza_minute||60)*60000;
+      const norma_ms=(d.ore_norma||8)*3600000;
+      const efectivMs=ds.reduce((a,s)=>a+Math.max(0,new Date(s.end_time)-new Date(s.start_time)-pauza_ms),0);
+      const diffMs=efectivMs-(ds.length*norma_ms);
+      return `<tr><td>${d.name}</td><td>${ds.length}</td><td>${dkm.toFixed(0)} km</td><td>${fmtDurS(dms)}</td><td>${fmtDurS(efectivMs)}</td><td class="${diffMs>=0?'diff-pos':'diff-neg'}">${fmtDurSign(diffMs)}</td></tr>`;
+    }).join('');
+    const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Raport Complet</title><style>
+      body{font-family:Arial,sans-serif;padding:30px;color:#111;font-size:12px}
+      h1{font-size:20px;margin:0 0 4px}
+      .sub{color:#666;font-size:11px;margin-bottom:20px}
+      .firma{font-size:13px;font-weight:bold;color:#555;margin-bottom:4px}
+      table{width:100%;border-collapse:collapse;margin-top:16px}
+      th{background:#f0f0f0;padding:8px 10px;text-align:left;font-size:11px;border:1px solid #ddd}
+      td{padding:7px 10px;border:1px solid #eee;font-size:11px}
+      tr:nth-child(even) td{background:#fafafa}
+      .totals{margin-top:20px;border:1px solid #ddd;border-radius:6px;padding:16px;display:flex;gap:30px;flex-wrap:wrap}
+      .tot-item{display:flex;flex-direction:column;gap:2px}
+      .tot-label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.05em}
+      .tot-val{font-size:18px;font-weight:bold}
+      .diff-pos{color:#16a34a}.diff-neg{color:#dc2626}
+      .footer{margin-top:30px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:10px}
+    </style></head><body>
+      <div class="firma">${company?company.name:''}</div>
+      <h1>Raport Complet Soferi</h1>
+      <div class="sub">Perioada: ${fmtDate(from+'T00:00:00')} — ${fmtDate(to+'T00:00:00')}</div>
+      <table>
+        <thead><tr><th>Sofer</th><th>Ture</th><th>Total Km</th><th>Ore Brut</th><th>Ore Efective</th><th>Diferenta</th></tr></thead>
+        <tbody>${driverRows}</tbody>
+      </table>
+      <div class="totals">
+        <div class="tot-item"><span class="tot-label">Total Soferi</span><span class="tot-val">${activeDrivers.length}</span></div>
+        <div class="tot-item"><span class="tot-label">Total Ture</span><span class="tot-val">${overall.n}</span></div>
+        <div class="tot-item"><span class="tot-label">Total Km</span><span class="tot-val">${overall.km.toFixed(0)} km</span></div>
+        <div class="tot-item"><span class="tot-label">Total Ore</span><span class="tot-val">${fmtDurS(overall.ms)}</span></div>
+      </div>
+      <div class="footer">Generat: ${new Date().toLocaleString('ro-RO')} · Pontaj ${company?company.code:''}</div>
+    </body></html>`;
+    const w=window.open('','_blank');
+    w.document.write(html);
+    w.document.close();
+    setTimeout(()=>w.print(),500);
+  };
+  return <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="bg-neutral-900 border border-neutral-800 rounded-t-xl sm:rounded-xl w-full max-w-3xl max-h-[95vh] flex flex-col su print-section">
+      {/* Header */}
+      <div className="flex items-start justify-between p-5 sm:p-6 border-b border-neutral-800">
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] text-accent uppercase tracking-[0.3em] mb-1">{company?company.name:''}</div>
+          <h3 className="font-display text-xl sm:text-2xl">{t('company_report')}</h3>
+          <div className="text-xs text-neutral-500 mt-1 font-mono">{t('report_period')}: {fmtDate(from+'T00:00:00')} — {fmtDate(to+'T00:00:00')}</div>
+        </div>
+        <button onClick={onClose} className="text-neutral-500 hover:text-neutral-200 no-print ml-3"><Ic n="x"/></button>
+      </div>
+      {/* Body */}
+      <div className="overflow-y-auto flex-1 p-5 sm:p-6">
+        {/* Date pickers */}
+        <div className="grid grid-cols-2 gap-3 mb-5 no-print">
+          <div>
+            <label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2 flex items-center gap-1"><Ic n="cal" c="w-3.5 h-3.5"/> {t('from_date')}</label>
+            <input type="date" value={from} onChange={e=>setFrom(e.target.value)} max={to} className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-3 py-2.5 focus:border-accent focus:outline-none font-mono text-sm"/>
+          </div>
+          <div>
+            <label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2 flex items-center gap-1"><Ic n="cal" c="w-3.5 h-3.5"/> {t('to_date')}</label>
+            <input type="date" value={to} onChange={e=>setTo(e.target.value)} min={from} max={todayStr} className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-3 py-2.5 focus:border-accent focus:outline-none font-mono text-sm"/>
+          </div>
+        </div>
+        {/* Overall stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          <div className="bg-neutral-950 border border-neutral-800 rounded-md p-3"><div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">{t('s_drivers')}</div><div className="font-display text-xl">{activeDrivers.length}</div></div>
+          <div className="bg-neutral-950 border border-neutral-800 rounded-md p-3"><div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">{t('s_shifts')}</div><div className="font-display text-xl">{overall.n}</div></div>
+          <div className="bg-neutral-950 border border-neutral-800 rounded-md p-3"><div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">{t('s_km')}</div><div className="font-display text-xl">{fmtNum(overall.km.toFixed(0))}</div></div>
+          <div className="bg-neutral-950 border border-neutral-800 rounded-md p-3"><div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">{t('s_hours')}</div><div className="font-display text-xl">{fmtDurS(overall.ms)}</div></div>
+        </div>
+        {/* Per-driver summary table */}
+        <div className="bg-neutral-950 border border-neutral-800 rounded-md overflow-hidden">
+          <div className="grid grid-cols-[1fr_auto_auto] gap-x-6 px-4 py-2.5 bg-neutral-900 text-[10px] uppercase tracking-widest text-neutral-500 font-mono">
+            <div>{t('tab_drivers')}</div>
+            <div className="text-right">{t('s_hours')}</div>
+            <div className="text-right">{t('s_km')}</div>
+          </div>
+          {activeDrivers.map(d=>{
+            const ds=byDriver[d.id]||[];
+            const dkm=ds.reduce((a,s)=>a+(s.end_km-s.start_km),0);
+            const dms=ds.reduce((a,s)=>a+(new Date(s.end_time)-new Date(s.start_time)),0);
+            return <div key={d.id} className="grid grid-cols-[1fr_auto_auto] gap-x-6 px-4 py-3 border-t border-neutral-800 items-center">
+              <div className="font-semibold truncate">{d.name}</div>
+              <div className="font-mono text-sm text-right whitespace-nowrap">{fmtDurS(dms)}</div>
+              <div className="font-mono text-sm text-right text-accent whitespace-nowrap">{dkm.toFixed(0)} km</div>
+            </div>;
+          })}
+        </div>
+        {/* Print-only footer */}
+        <div className="hidden print:block mt-6 pt-4 border-t border-neutral-300 text-xs text-neutral-500">
+          {t('generated_on')} {new Date().toLocaleString(LOC)}
+        </div>
+      </div>
+      {/* Buttons */}
+      <div className="p-5 sm:p-6 border-t border-neutral-800 flex gap-3 no-print">
+        <button onClick={handlePDF} disabled={overall.n===0} className="flex-1 btn-accent py-3 rounded-md font-semibold disabled:opacity-40 flex items-center justify-center gap-2"><Ic n="dl" c="w-4 h-4"/> Descarca PDF</button>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ============ PLATFORM (read-only overview) ============ */
+function Platform({onLogout}){
+  const {t}=useT(); const [rows,setRows]=useState(null);
+  useEffect(()=>{(async()=>{
+    const c=await sb.from('companies').select('id,name,code,accent,mark').order('name');
+    const out=[];
+    for(const co of (c.data||[])){
+      const d=await sb.from('drivers').select('id',{count:'exact',head:true}).eq('company_id',co.id);
+      out.push({...co,drivers:d.count||0});
+    }
+    setRows(out);
+  })();},[]);
+  if(rows===null) return <Spinner/>;
+  return <div className="su">
+    <div className="mb-6"><div className="text-[11px] text-accent uppercase tracking-[0.3em] mb-1">{t('platform')}</div><h1 className="font-display text-3xl sm:text-4xl">{t('plat_d')}</h1></div>
+    <div className="space-y-2">{rows.map(c=><div key={c.id} className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 flex items-center gap-4">
+      <div className="w-12 h-12 rounded-md flex items-center justify-center font-display" style={{background:c.accent,color:'#0a0a0a'}}>{c.mark}</div>
+      <div className="flex-1"><div className="font-semibold">{c.name}</div><div className="text-xs text-neutral-500 font-mono mt-0.5">{t('code_l')}: {c.code} · {c.drivers} {t('drivers_w')}</div></div>
+    </div>)}</div>
+  </div>;
+}
+
+/* ============ ROOT ============ */
+function App(){
+  const [lang,setLangS]=useState(ls.get('pontaj_lang')||'ro');
+  const [view,setView]=useState('boot');
+  const [company,setCompany]=useState(null);
+  const [session,setSession]=useState(null);
+  const [profile,setProfile]=useState(null);
+  const [toast,setToast]=useState(null);
+  LOC=LOCALE[lang];
+  const t=useMemo(()=>(k)=>{const v=(DICT[lang]&&DICT[lang][k]!==undefined)?DICT[lang][k]:DICT.ro[k];return v===undefined?k:v;},[lang]);
+  const setLang=(l)=>{setLangS(l);ls.set('pontaj_lang',l);};
+  useEffect(()=>{if(toast){const x=setTimeout(()=>setToast(null),3200);return ()=>clearTimeout(x);}},[toast]);
+
+  // boot: restore driver session or admin session
+  useEffect(()=>{(async()=>{
+    const ds=ls.get('pontaj_driver');
+    if(ds&&ds.token&&ds.expires_at&&new Date(ds.expires_at)>new Date()){
+      const a=await sb.rpc('driver_active_shift',{p_token:ds.token});
+      if(a.data&&a.data.ok!==false){ setSession(ds); document.documentElement.style.setProperty('--accent',ds.accent||'#f59e0b'); setView('driver'); return; }
+      ls.del('pontaj_driver');
+    }
+    const {data}=await sb.auth.getSession();
+    if(data&&data.session){ await loadProfile(); return; }
+    setView('entry');
+  })();},[]);
+
+  const loadProfile=async()=>{
+    const {data:u}=await sb.auth.getUser();
+    if(!u||!u.user){ setView('entry'); return; }
+    const {data:p}=await sb.from('profiles').select('role,company_id').eq('id',u.user.id).maybeSingle();
+    if(!p){ await sb.auth.signOut(); setView('entry'); return; }
+    setProfile(p);
+    setView(p.role==='platform_admin'?'platform':'admin');
+  };
+  const driverLogged=(d)=>{ const s={token:d.token,driver_name:d.driver_name,accent:d.accent,expires_at:d.expires_at,company_name:d.company_name};
+    ls.set('pontaj_driver',s); setSession(s); document.documentElement.style.setProperty('--accent',d.accent||'#f59e0b'); setView('driver'); };
+  const driverLogout=()=>{ ls.del('pontaj_driver'); setSession(null); document.documentElement.style.setProperty('--accent','#f59e0b'); setView('entry'); };
+  const adminLogout=async()=>{ await sb.auth.signOut(); setProfile(null); document.documentElement.style.setProperty('--accent','#f59e0b'); setView('entry'); };
+
+  const headerName = view==='driver'? (session&&session.company_name) : (view==='admin'&&profile? '' : null);
+  return <LangCtx.Provider value={{lang,setLang,t}}>
+    <div className="min-h-screen grid-bg">
+      <div className="border-b border-neutral-800/80 bg-neutral-950/80 backdrop-blur sticky top-0 z-30">
+        <div className="max-w-5xl mx-auto px-4 sm:px-5 py-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-md bg-neutral-100 text-neutral-950 flex items-center justify-center shrink-0 font-display">P</div>
+            <div className="min-w-0"><div className="font-display text-base sm:text-lg leading-none truncate">{(view==='driver'&&session)?session.company_name:'PONTAJ'}</div>
+              <div className="text-[10px] text-neutral-500 uppercase tracking-widest mt-0.5 truncate">{t('brand_sub')}</div></div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <LangSwitcher/>
+            {(view==='driver')&&<button onClick={driverLogout} className="flex items-center gap-2 px-3 py-2 rounded-md border border-neutral-800 hover:border-neutral-600 text-sm"><Ic n="out" c="w-4 h-4"/><span className="hidden sm:inline">{t('logout')}</span></button>}
+            {(view==='admin'||view==='platform')&&<button onClick={adminLogout} className="flex items-center gap-2 px-3 py-2 rounded-md border border-neutral-800 hover:border-neutral-600 text-sm"><Ic n="out" c="w-4 h-4"/><span className="hidden sm:inline">{t('logout')}</span></button>}
+          </div>
+        </div>
+      </div>
+      <main className="max-w-5xl mx-auto px-4 sm:px-5 py-8">
+        {view==='boot'&&<Spinner/>}
+        {view==='entry'&&<Entry onCompany={(c)=>{setCompany(c);document.documentElement.style.setProperty('--accent',c.accent||'#f59e0b');setView('driverLogin');}} onAdmin={()=>setView('adminLogin')} toast={setToast}/>}
+        {view==='driverLogin'&&company&&<DriverLogin company={company} onLogged={driverLogged} onBack={()=>{setCompany(null);document.documentElement.style.setProperty('--accent','#f59e0b');setView('entry');}} toast={setToast}/>}
+        {view==='driver'&&session&&<DriverDash session={session} onLogout={driverLogout} toast={setToast}/>}
+        {view==='adminLogin'&&<AdminLogin onIn={loadProfile} onBack={()=>setView('entry')} toast={setToast}/>}
+        {view==='admin'&&profile&&<AdminPanel profile={profile} onLogout={adminLogout} toast={setToast}/>}
+        {view==='platform'&&<Platform onLogout={adminLogout}/>}
+      </main>
+      <Toast t={toast}/>
+    </div>
+  </LangCtx.Provider>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
