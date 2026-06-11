@@ -98,7 +98,7 @@ f_start_km:'Km start', f_end_km:'Km final',
 f_reason:'Motiv (obligatoriu)', f_reason_ph:'ex: km introduși greșit',
 err_time_order:'Ora finală trebuie să fie după ora de început.',
 err_save:'Eroare la salvare.', t_shift_edited:'Tură actualizată.',
-edit_btn:'Editează'},
+edit_btn:'Editează', edit_driver:'Editează șofer', save_btn:'Salvează', t_driver_upd:'Șofer actualizat.'},
   en:{ brand_sub:'Driver timesheet system', logout:'Sign out', loading:'Loading...',
     cancel:'Cancel', save:'Save', add:'Add', back:'Back',
     entry_kicker:'Company access', entry_title:'COMPANY CODE', entry_desc:'Enter the code from your company.',
@@ -142,7 +142,7 @@ f_start_km:'Start km', f_end_km:'End km',
 f_reason:'Reason (required)', f_reason_ph:'e.g. km entered incorrectly',
 err_time_order:'End time must be after start time.',
 err_save:'Save failed.', t_shift_edited:'Shift updated.',
-edit_btn:'Edit' },
+edit_btn:'Edit', edit_driver:'Edit driver', save_btn:'Save', t_driver_upd:'Driver updated.' },
   de:{ brand_sub:'Fahrer-Zeiterfassung', logout:'Abmelden', loading:'Wird geladen...',
     cancel:'Abbrechen', save:'Speichern', add:'Hinzufügen', back:'Zurück',
     entry_kicker:'Firmenzugang', entry_title:'FIRMENCODE', entry_desc:'Geben Sie den Code Ihrer Firma ein.',
@@ -186,7 +186,7 @@ f_start_km:'Start-km', f_end_km:'End-km',
 f_reason:'Grund (Pflichtfeld)', f_reason_ph:'z. B. km falsch eingegeben',
 err_time_order:'Endzeit muss nach der Startzeit sein.',
 err_save:'Speichern fehlgeschlagen.', t_shift_edited:'Schicht aktualisiert.',
-edit_btn:'Bearbeiten' },
+edit_btn:'Bearbeiten', edit_driver:'Fahrer bearbeiten', save_btn:'Speichern', t_driver_upd:'Fahrer aktualisiert.' },
 };
 const LangCtx = createContext(null);
 const useT = () => useContext(LangCtx);
@@ -198,6 +198,25 @@ const fmtDurS=(ms)=>{const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.flo
 const fmtDurSign=(ms)=>{const sign=ms<0?'-':'+';const a=Math.abs(ms),s=Math.floor(a/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return `${sign}${h}h ${String(m).padStart(2,'0')}m`;};
 const fmtTime=(iso)=>new Date(iso).toLocaleTimeString(LOC,{hour:'2-digit',minute:'2-digit'});
 const fmtDate=(iso)=>new Date(iso).toLocaleDateString(LOC,{day:'2-digit',month:'2-digit',year:'numeric'});
+// Cheia de zi LOCALA a unei ture (dupa data de start), ca gruparea sa respecte ziua reala a soferului
+const dayKey=(iso)=>{const d=new Date(iso);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
+// Calculeaza statistici grupand turele pe ZILE: norma si pauza se aplica o singura data pe zi
+const calcStats=(shiftsArr,oreNorma,pauzaMinute)=>{
+  const pauza_ms=(pauzaMinute||60)*60000;
+  const norma_ms=(oreNorma||8)*3600000;
+  const days={};
+  shiftsArr.forEach(s=>{const k=dayKey(s.start_time);(days[k]=days[k]||[]).push(s);});
+  let brutMs=0,efectivMs=0,km=0;
+  Object.values(days).forEach(dayShifts=>{
+    const dayBrut=dayShifts.reduce((a,s)=>a+(new Date(s.end_time)-new Date(s.start_time)),0);
+    brutMs+=dayBrut;
+    efectivMs+=Math.max(0,dayBrut-pauza_ms); // o singura pauza pe zi
+    km+=dayShifts.reduce((a,s)=>a+(s.end_km-s.start_km),0);
+  });
+  const nDays=Object.keys(days).length;
+  const normaMs=nDays*norma_ms; // o singura norma pe zi lucrata
+  return {brutMs,efectivMs,km,nDays,normaMs,diffMs:efectivMs-normaMs,nShifts:shiftsArr.length};
+};
 const fmtNum=(n)=>Number(n).toLocaleString(LOC);
 const ls={get:(k)=>{try{return JSON.parse(localStorage.getItem(k));}catch{return null;}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}},del:(k)=>{try{localStorage.removeItem(k);}catch{}}};
 
@@ -465,6 +484,7 @@ function AdminPanel({profile,onLogout,toast}){
   const [detailDriver,setDetailDriver]=useState(null);
   const [showReport,setShowReport]=useState(false);
   const [editingShift,setEditingShift]=useState(null);
+  const [editingDriver,setEditingDriver]=useState(null);
   const load=async()=>{
     const c=await sb.from('companies').select('*').eq('id',profile.company_id).maybeSingle();
     if(c.data){ setCompany(c.data); document.documentElement.style.setProperty('--accent',c.data.accent); }
@@ -494,6 +514,11 @@ function AdminPanel({profile,onLogout,toast}){
   };
   const deact=async(d)=>{ if(!confirm(t('confirm_deact')))return;
     await sb.from('drivers').update({active:false}).eq('id',d.id); toast({type:'ok',msg:t('t_deact')}); load(); };
+  const editDriver=async(d,ore,pauza)=>{
+    const {error}=await sb.from('drivers').update({ore_norma:ore,pauza_minute:pauza}).eq('id',d.id);
+    if(!error){toast({type:'ok',msg:t('t_driver_upd')});setEditingDriver(null);load();}
+    else toast({type:'error',msg:t('signin_err')});
+  };
   const saveBrand=async(f)=>{ await sb.from('companies').update({name:f.name,mark:f.mark,accent:f.accent}).eq('id',company.id);
     setCompany({...company,...f}); document.documentElement.style.setProperty('--accent',f.accent); setShowBrand(false); toast({type:'ok',msg:t('t_brand')}); };
   if(loading) return <Spinner/>;
@@ -532,10 +557,12 @@ function AdminPanel({profile,onLogout,toast}){
         <div className="w-10 h-10 rounded-md bg-neutral-800 group-hover:bg-accent-soft flex items-center justify-center"><Ic n="user"/></div>
         <div className="flex-1 min-w-0"><div className="font-semibold truncate">{d.name}</div><div className="text-xs text-neutral-500 mt-0.5">{t('view_perf')}</div></div>
         <span className="text-neutral-600 group-hover:text-accent"><Ic n="chev"/></span>
+        <button onClick={(e)=>{e.stopPropagation();setEditingDriver(d);}} className="text-neutral-600 hover:text-accent p-2" title={t('edit_driver')}><Ic n="edit" c="w-4 h-4"/></button>
         <button onClick={(e)=>{e.stopPropagation();deact(d);}} className="text-neutral-600 hover:text-red-400 p-2"><Ic n="trash" c="w-4 h-4"/></button>
       </div>)}</div>
     </div>}
     {showAdd&&<AddDriver onClose={()=>setShowAdd(false)} onSubmit={addDriver}/>}
+    {editingDriver&&<EditDriverModal driver={editingDriver} onClose={()=>setEditingDriver(null)} onSave={editDriver}/>}
     {showBrand&&company&&<BrandModal company={company} onClose={()=>setShowBrand(false)} onSave={saveBrand}/>}
 {detailDriver&&<DriverDetailModal driver={detailDriver} shifts={shifts} company={company} onClose={()=>setDetailDriver(null)} onEditShift={setEditingShift}/>}
     {editingShift&&<EditShiftModal shift={editingShift} driverName={(drivers.find(d=>d.id===editingShift.driver_id)||{}).name||''} onClose={()=>setEditingShift(null)} onSave={async(vals)=>{
@@ -583,6 +610,29 @@ function AddDriver({onClose,onSubmit}){
     </div></div>
   </div>;
 }
+function EditDriverModal({driver,onClose,onSave}){
+  const {t}=useT();
+  const [ore,setOre]=useState(String(driver.ore_norma||8));
+  const [pauza,setPauza]=useState(String(driver.pauza_minute||60));
+  const ok=Number(ore)>0&&Number(ore)<=24&&Number(pauza)>=0&&Number(pauza)<=240;
+  return <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+    <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-sm su"><div className="p-6">
+      <div className="flex items-start justify-between mb-2"><h3 className="font-display text-xl">{t('edit_driver')}</h3><button onClick={onClose} className="text-neutral-500"><Ic n="x"/></button></div>
+      <div className="text-sm text-neutral-400 mb-6 font-semibold">{driver.name}</div>
+      <Field label="Ore norma / zi"><input inputMode="decimal" value={ore} onChange={e=>setOre(e.target.value.replace(/[^0-9.]/g,''))} autoFocus className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-4 py-3 font-mono text-xl focus:border-accent focus:outline-none"/></Field>
+      <Field label="Pauza (minute)">
+        <div className="flex gap-2 mb-2">
+          {[30,45,60].map(v=><button key={v} onClick={()=>setPauza(String(v))} className={"flex-1 py-3 rounded-md border font-mono text-sm font-semibold transition-colors "+(pauza===String(v)?'btn-accent border-transparent':'border-neutral-700 hover:border-accent text-neutral-300')}>{v} min</button>)}
+        </div>
+        <input inputMode="numeric" value={pauza} onChange={e=>setPauza(e.target.value.replace(/\D/g,'').slice(0,3))} className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-4 py-3 font-mono text-base focus:border-accent focus:outline-none"/>
+      </Field>
+      <div className="grid grid-cols-2 gap-3 mt-2">
+        <button onClick={onClose} className="py-3 rounded-md border border-neutral-800 hover:bg-neutral-800 font-medium">{t('cancel')}</button>
+        <button onClick={()=>onSave(driver,Number(ore),Number(pauza))} disabled={!ok} className="btn-accent py-3 rounded-md font-semibold disabled:opacity-40">{t('save_btn')}</button>
+      </div>
+    </div></div>
+  </div>;
+}
 function BrandModal({company,onClose,onSave}){
   const {t}=useT(); const PAL=['#f59e0b','#38bdf8','#34d399','#f472b6','#a78bfa','#fb7185','#facc15','#2dd4bf'];
   const [f,setF]=useState({name:company.name,mark:company.mark,accent:company.accent});
@@ -611,22 +661,19 @@ function DriverDetailModal({driver,shifts,company,onClose,onEditShift}){
       .sort((a,b)=>new Date(a.start_time)-new Date(b.start_time));
   },[shifts,driver.id,from,to]);
   const stats=useMemo(()=>{
-    const km=inRange.reduce((a,s)=>a+(s.end_km-s.start_km),0);
-    const ms=inRange.reduce((a,s)=>a+(new Date(s.end_time)-new Date(s.start_time)),0);
-    return {n:inRange.length,km,ms};
-  },[inRange]);
+    const c=calcStats(inRange,driver.ore_norma,driver.pauza_minute);
+    return {n:inRange.length,km:c.km,ms:c.brutMs,efectivMs:c.efectivMs,normaMs:c.normaMs,diffMs:c.diffMs,nDays:c.nDays};
+  },[inRange,driver.ore_norma,driver.pauza_minute]);
   const handlePDF=()=>{
-    const pauza_ms=(driver.pauza_minute||60)*60000;
-    const norma_ms=(driver.ore_norma||8)*3600000;
-    const totalKm=inRange.reduce((a,s)=>a+(s.end_km-s.start_km),0);
-    const totalMs=inRange.reduce((a,s)=>a+(new Date(s.end_time)-new Date(s.start_time)),0);
-    const efectivMs=inRange.reduce((a,s)=>a+Math.max(0,new Date(s.end_time)-new Date(s.start_time)-pauza_ms),0);
-    const normaMs=inRange.length*norma_ms;
-    const diffMs=efectivMs-normaMs;
+    const st=calcStats(inRange,driver.ore_norma,driver.pauza_minute);
+    const totalKm=st.km;
+    const totalMs=st.brutMs;
+    const efectivMs=st.efectivMs;
+    const normaMs=st.normaMs;
+    const diffMs=st.diffMs;
     const rows=inRange.map(s=>{
       const durMs=new Date(s.end_time)-new Date(s.start_time);
-      const efMs=Math.max(0,durMs-pauza_ms);
-      return [fmtDate(s.start_time),fmtTime(s.start_time),fmtTime(s.end_time),fmtNum(s.start_km),fmtNum(s.end_km),(s.end_km-s.start_km).toFixed(1)+' km',fmtDurS(efMs)];
+      return [fmtDate(s.start_time),fmtTime(s.start_time),fmtTime(s.end_time),fmtNum(s.start_km),fmtNum(s.end_km),(s.end_km-s.start_km).toFixed(1)+' km',fmtDurS(durMs)];
     });
     const tableRows=rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('');
     const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pontaj ${driver.name}</title><style>
@@ -649,7 +696,7 @@ function DriverDetailModal({driver,shifts,company,onClose,onEditShift}){
       <h1>${driver.name}</h1>
       <div class="sub">Perioada: ${fmtDate(from+'T00:00:00')} — ${fmtDate(to+'T00:00:00')}</div>
       <table>
-        <thead><tr><th>Data</th><th>Start</th><th>Final</th><th>Km Start</th><th>Km Final</th><th>Km Parcursi</th><th>Ore Efective</th></tr></thead>
+        <thead><tr><th>Data</th><th>Start</th><th>Final</th><th>Km Start</th><th>Km Final</th><th>Km Parcursi</th><th>Ore Tura</th></tr></thead>
         <tbody>${tableRows}</tbody>
       </table>
       <div class="totals">
@@ -756,13 +803,8 @@ function CompanyReportModal({drivers,shifts,company,onClose}){
   const handlePDF=()=>{
     const driverRows=activeDrivers.map(d=>{
       const ds=byDriver[d.id]||[];
-      const dkm=ds.reduce((a,s)=>a+(s.end_km-s.start_km),0);
-      const dms=ds.reduce((a,s)=>a+(new Date(s.end_time)-new Date(s.start_time)),0);
-      const pauza_ms=(d.pauza_minute||60)*60000;
-      const norma_ms=(d.ore_norma||8)*3600000;
-      const efectivMs=ds.reduce((a,s)=>a+Math.max(0,new Date(s.end_time)-new Date(s.start_time)-pauza_ms),0);
-      const diffMs=efectivMs-(ds.length*norma_ms);
-      return `<tr><td>${d.name}</td><td>${ds.length}</td><td>${dkm.toFixed(0)} km</td><td>${fmtDurS(dms)}</td><td>${fmtDurS(efectivMs)}</td><td class="${diffMs>=0?'diff-pos':'diff-neg'}">${fmtDurSign(diffMs)}</td></tr>`;
+      const c=calcStats(ds,d.ore_norma,d.pauza_minute);
+      return `<tr><td>${d.name}</td><td>${ds.length}</td><td>${c.km.toFixed(0)} km</td><td>${fmtDurS(c.brutMs)}</td><td>${fmtDurS(c.efectivMs)}</td><td class="${c.diffMs>=0?'diff-pos':'diff-neg'}">${fmtDurSign(c.diffMs)}</td></tr>`;
     }).join('');
     const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Raport Complet</title><style>
       body{font-family:Arial,sans-serif;padding:30px;color:#111;font-size:12px}
