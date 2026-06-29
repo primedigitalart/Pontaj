@@ -676,7 +676,7 @@ function DriverDetailModal({driver,shifts,company,onClose,onEditShift}){
       return [fmtDate(s.start_time),fmtTime(s.start_time),fmtTime(s.end_time),fmtNum(s.start_km),fmtNum(s.end_km),(s.end_km-s.start_km).toFixed(1)+' km',fmtDurS(durMs)];
     });
     const tableRows=rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('');
-    const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pontaj ${driver.name}</title><style>
+    const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Arbeitszeitnachweis ${driver.name}</title><style>
       body{font-family:Arial,sans-serif;padding:30px;color:#111;font-size:12px}
       h1{font-size:20px;margin:0 0 4px}
       .sub{color:#666;font-size:11px;margin-bottom:20px}
@@ -692,22 +692,23 @@ function DriverDetailModal({driver,shifts,company,onClose,onEditShift}){
       .diff-pos{color:#16a34a}.diff-neg{color:#dc2626}
       .footer{margin-top:30px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:10px}
     </style></head><body>
-      <div class="firma">${company?company.name:''}</div>
-      <h1>${driver.name}</h1>
-      <div class="sub">Perioada: ${fmtDate(from+'T00:00:00')} — ${fmtDate(to+'T00:00:00')}</div>
+      <div class="firma">AS Transport und Umzug</div>
+      <div class="sub" style="margin-bottom:16px">Liesendahler Weg 7, 51399 Burscheid, Deutschland</div>
+      <h1>Arbeitszeitnachweis</h1>
+      <div class="sub">${driver.name} · Zeitraum: ${fmtDate(from+'T00:00:00')} — ${fmtDate(to+'T00:00:00')}</div>
       <table>
-        <thead><tr><th>Data</th><th>Start</th><th>Final</th><th>Km Start</th><th>Km Final</th><th>Km Parcursi</th><th>Ore Tura</th></tr></thead>
+        <thead><tr><th>Datum</th><th>Beginn</th><th>Ende</th><th>km Start</th><th>km Ende</th><th>gefahrene km</th><th>Arbeitsstunden</th></tr></thead>
         <tbody>${tableRows}</tbody>
       </table>
       <div class="totals">
-        <div class="tot-item"><span class="tot-label">Total Ture</span><span class="tot-val">${inRange.length}</span></div>
-        <div class="tot-item"><span class="tot-label">Total Km</span><span class="tot-val">${totalKm.toFixed(0)} km</span></div>
-        <div class="tot-item"><span class="tot-label">Total Ore Brut</span><span class="tot-val">${fmtDurS(totalMs)}</span></div>
-        <div class="tot-item"><span class="tot-label">Ore Efective</span><span class="tot-val">${fmtDurS(efectivMs)}</span></div>
-        <div class="tot-item"><span class="tot-label">Norma (${driver.ore_norma||8}h/zi)</span><span class="tot-val">${fmtDurS(normaMs)}</span></div>
-        <div class="tot-item"><span class="tot-label">Diferenta</span><span class="tot-val ${diffMs>=0?'diff-pos':'diff-neg'}">${fmtDurSign(diffMs)}</span></div>
+        <div class="tot-item"><span class="tot-label">Schichten gesamt</span><span class="tot-val">${inRange.length}</span></div>
+        <div class="tot-item"><span class="tot-label">gefahrene km gesamt</span><span class="tot-val">${totalKm.toFixed(0)} km</span></div>
+        <div class="tot-item"><span class="tot-label">Bruttoarbeitszeit</span><span class="tot-val">${fmtDurS(totalMs)}</span></div>
+        <div class="tot-item"><span class="tot-label">Istarbeitszeit</span><span class="tot-val">${fmtDurS(efectivMs)}</span></div>
+        <div class="tot-item"><span class="tot-label">Sollarbeitszeit (${driver.ore_norma||8}h/Tag)</span><span class="tot-val">${fmtDurS(normaMs)}</span></div>
+        <div class="tot-item"><span class="tot-label">Differenz (Ist − Soll)</span><span class="tot-val ${diffMs>=0?'diff-pos':'diff-neg'}">${fmtDurSign(diffMs)}</span></div>
       </div>
-      <div class="footer">Generat: ${new Date().toLocaleString('ro-RO')} · Pontaj ${company?company.code:''}</div>
+      <div class="footer">Erstellt am: ${new Date().toLocaleString('de-DE')} · Pontaj ${company?company.code:''}</div>
     </body></html>`;
     const w=window.open('','_blank');
     w.document.write(html);
@@ -806,7 +807,7 @@ function CompanyReportModal({drivers,shifts,company,onClose}){
       const c=calcStats(ds,d.ore_norma,d.pauza_minute);
       return `<tr><td>${d.name}</td><td>${ds.length}</td><td>${c.km.toFixed(0)} km</td><td>${fmtDurS(c.brutMs)}</td><td>${fmtDurS(c.efectivMs)}</td><td class="${c.diffMs>=0?'diff-pos':'diff-neg'}">${fmtDurSign(c.diffMs)}</td></tr>`;
     }).join('');
-    const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Raport Complet</title><style>
+    const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Arbeitszeitnachweis – Gesamtübersicht</title><style>
       body{font-family:Arial,sans-serif;padding:30px;color:#111;font-size:12px}
       h1{font-size:20px;margin:0 0 4px}
       .sub{color:#666;font-size:11px;margin-bottom:20px}
@@ -822,20 +823,21 @@ function CompanyReportModal({drivers,shifts,company,onClose}){
       .diff-pos{color:#16a34a}.diff-neg{color:#dc2626}
       .footer{margin-top:30px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:10px}
     </style></head><body>
-      <div class="firma">${company?company.name:''}</div>
-      <h1>Raport Complet Soferi</h1>
-      <div class="sub">Perioada: ${fmtDate(from+'T00:00:00')} — ${fmtDate(to+'T00:00:00')}</div>
+      <div class="firma">AS Transport und Umzug</div>
+      <div class="sub" style="margin-bottom:16px">Liesendahler Weg 7, 51399 Burscheid, Deutschland</div>
+      <h1>Arbeitszeitnachweis – Gesamtübersicht</h1>
+      <div class="sub">Zeitraum: ${fmtDate(from+'T00:00:00')} — ${fmtDate(to+'T00:00:00')}</div>
       <table>
-        <thead><tr><th>Sofer</th><th>Ture</th><th>Total Km</th><th>Ore Brut</th><th>Ore Efective</th><th>Diferenta</th></tr></thead>
+        <thead><tr><th>Fahrer</th><th>Schichten</th><th>gefahrene km</th><th>Bruttozeit</th><th>Istzeit</th><th>Differenz</th></tr></thead>
         <tbody>${driverRows}</tbody>
       </table>
       <div class="totals">
-        <div class="tot-item"><span class="tot-label">Total Soferi</span><span class="tot-val">${activeDrivers.length}</span></div>
-        <div class="tot-item"><span class="tot-label">Total Ture</span><span class="tot-val">${overall.n}</span></div>
-        <div class="tot-item"><span class="tot-label">Total Km</span><span class="tot-val">${overall.km.toFixed(0)} km</span></div>
-        <div class="tot-item"><span class="tot-label">Total Ore</span><span class="tot-val">${fmtDurS(overall.ms)}</span></div>
+        <div class="tot-item"><span class="tot-label">Fahrer gesamt</span><span class="tot-val">${activeDrivers.length}</span></div>
+        <div class="tot-item"><span class="tot-label">Schichten gesamt</span><span class="tot-val">${overall.n}</span></div>
+        <div class="tot-item"><span class="tot-label">gefahrene km gesamt</span><span class="tot-val">${overall.km.toFixed(0)} km</span></div>
+        <div class="tot-item"><span class="tot-label">Arbeitszeit gesamt</span><span class="tot-val">${fmtDurS(overall.ms)}</span></div>
       </div>
-      <div class="footer">Generat: ${new Date().toLocaleString('ro-RO')} · Pontaj ${company?company.code:''}</div>
+      <div class="footer">Erstellt am: ${new Date().toLocaleString('de-DE')} · Pontaj ${company?company.code:''}</div>
     </body></html>`;
     const w=window.open('','_blank');
     w.document.write(html);
